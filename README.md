@@ -7,3 +7,4 @@
 
 4. ```node server.js ```
 
+![Hyperliquid Whale Tracker](https://raw.githubusercontent.com/repixey/hyperliquid-whale-tracker/main/img/IMG.png)
