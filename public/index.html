@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HL Whale Tracker — BTC</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0d;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #111;
+    border-bottom: 1px solid #222;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  header h1 { font-size: 15px; color: #fff; letter-spacing: 1px; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #333; flex-shrink: 0;
+  }
+  .dot.online { background: #22c55e; }
+
+  .status-text { font-size: 11px; color: #666; }
+  .btc-price { margin-left: auto; font-size: 13px; color: #facc15; }
+
+  .container { padding: 16px 24px; }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .filter-bar label { color: #888; font-size: 12px; }
+
+  .filter-bar input {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    width: 160px;
+    outline: none;
+  }
+  .filter-bar input:focus { border-color: #444; }
+
+  .btn {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    color: #ccc;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .btn:hover { background: #252525; color: #fff; }
+  .btn.active { border-color: #555; color: #fff; background: #252525; }
+
+  /* Stats */
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    padding: 10px 16px;
+    min-width: 140px;
+  }
+
+  .stat-card .label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .stat-card .value { font-size: 15px; color: #e0e0e0; }
+  .stat-card .value.long { color: #22c55e; }
+  .stat-card .value.short { color: #ef4444; }
+
+  /* Progress bar */
+  .ls-bar {
+    background: #1a1a1a;
+    border: 1px solid #1e1e1e;
+    height: 6px;
+    margin-bottom: 16px;
+    display: flex;
+    overflow: hidden;
+  }
+  .ls-bar .long-fill { background: #22c55e; height: 100%; }
+  .ls-bar .short-fill { background: #ef4444; height: 100%; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    background: #111;
+    color: #555;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #1e1e1e;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #161616;
+  }
+  tbody tr:hover { background: #131313; }
+
+  tbody td {
+    padding: 7px 10px;
+    color: #c0c0c0;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .side-long { color: #22c55e; font-weight: bold; }
+  .side-short { color: #ef4444; font-weight: bold; }
+
+  .addr {
+    color: #6b9eff;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .addr:hover { text-decoration: underline; }
+
+  .users-cell { display: flex; flex-direction: column; gap: 2px; }
+
+  .notional { color: #facc15; }
+
+  .hash {
+    color: #444;
+    font-size: 10px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .pagination .page-info { color: #555; font-size: 11px; }
+  .page-btn {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #888;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+  }
+  .page-btn:hover:not(:disabled) { color: #ccc; border-color: #444; }
+  .page-btn:disabled { opacity: 0.3; cursor: default; }
+  .page-btn.current { color: #fff; border-color: #555; background: #222; }
+
+  .empty { color: #333; padding: 32px; text-align: center; }
+
+  .auto-badge {
+    font-size: 10px;
+    color: #555;
+    border: 1px solid #222;
+    padding: 2px 6px;
+    margin-left: auto;
+  }
+  .auto-badge.on { color: #22c55e; border-color: #22c55e33; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="dot"></div>
+  <h1>HL WHALE TRACKER · BTC</h1>
+  <span class="status-text" id="statusText">Connecting...</span>
+  <span class="btc-price" id="btcPrice">—</span>
+</header>
+
+<div class="container">
+
+  <div class="filter-bar">
+    <label>Min notional ($)</label>
+    <input type="number" id="minSize" value="0" placeholder="e.g. 1000000" step="10000" />
+    <button class="btn" onclick="applyFilter()">Apply</button>
+    <button class="btn" onclick="setPreset(100000)">$100K</button>
+    <button class="btn" onclick="setPreset(500000)">$500K</button>
+    <button class="btn" onclick="setPreset(1000000)">$1M</button>
+    <div class="auto-badge" id="autoBadge">AUTO-REFRESH: OFF</div>
+    <button class="btn" id="autoBtn" onclick="toggleAuto()">Enable Auto</button>
+  </div>
+
+  <div class="stats" id="statsRow">
+    <div class="stat-card"><div class="label">Filtered trades</div><div class="value" id="sCount">—</div></div>
+    <div class="stat-card"><div class="label">Long volume</div><div class="value long" id="sLongVol">—</div></div>
+    <div class="stat-card"><div class="label">Short volume</div><div class="value short" id="sShortVol">—</div></div>
+    <div class="stat-card"><div class="label">Long %</div><div class="value long" id="sLongPct">—</div></div>
+    <div class="stat-card"><div class="label">Short %</div><div class="value short" id="sShortPct">—</div></div>
+    <div class="stat-card"><div class="label">Total notional</div><div class="value" id="sTotal">—</div></div>
+  </div>
+
+  <div class="ls-bar">
+    <div class="long-fill" id="longFill" style="width:50%"></div>
+    <div class="short-fill" id="shortFill" style="width:50%"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Time</th>
+          <th>Side</th>
+          <th>Price</th>
+          <th>Size (BTC)</th>
+          <th>Notional ($)</th>
+          <th>Maker</th>
+          <th>Taker</th>
+          <th>Merged</th>
+          <th>TX Hash</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="empty" id="emptyMsg" style="display:none">No trades match the filter</div>
+  </div>
+
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+  let currentPage = 1;
+  let currentMin = 0;
+  let pageSize = 20;
+  let autoInterval = null;
+
+  function fmt(n) {
+    return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  function fmtTime(ts) {
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    const ago = mins === 0 ? "just now" : mins + "m ago";
+    const d = new Date(ts);
+    return d.toTimeString().slice(0, 8) + ` <span style="color:#555">(${ago})</span>`;
+  }
+
+  function shortAddr(addr) {
+    if (!addr) return '—';
+    return addr.slice(0, 6) + '...' + addr.slice(-4);
+  }
+
+  function openAddr(addr) {
+    window.open(`https://www.coinglass.com/hyperliquid/${addr}`, '_blank');
+  }
+
+  async function fetchStatus() {
+    try {
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      document.getElementById('dot').className = 'dot' + (d.connected ? ' online' : '');
+      document.getElementById('statusText').textContent = d.connected
+        ? `Connected · ${d.totalTrades} trades buffered`
+        : 'Disconnected';
+      if (d.btcPrice) {
+        document.getElementById('btcPrice').textContent = '$' + fmt(d.btcPrice);
+      }
+    } catch(e) {}
+  }
+
+  async function fetchTrades() {
+    const res = await fetch(`/api/trades?minSize=${currentMin}&page=${currentPage}&pageSize=${pageSize}`);
+    const data = await res.json();
+
+    // stats
+    const s = data.stats;
+    document.getElementById('sCount').textContent = fmt(s.count);
+    document.getElementById('sLongVol').textContent = '$' + fmt(s.longNotional);
+    document.getElementById('sShortVol').textContent = '$' + fmt(s.shortNotional);
+    document.getElementById('sLongPct').textContent = s.longPct + '%';
+    document.getElementById('sShortPct').textContent = s.shortPct + '%';
+    document.getElementById('sTotal').textContent = '$' + fmt(s.totalNotional);
+    document.getElementById('longFill').style.width = s.longPct + '%';
+    document.getElementById('shortFill').style.width = s.shortPct + '%';
+
+    // table
+    const tbody = document.getElementById('tableBody');
+    const empty = document.getElementById('emptyMsg');
+
+    if (!data.items.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = data.items.map((t, i) => {
+        const isLong = t.side === 'B';
+        const sideLabel = isLong
+          ? '<span class="side-long">LONG</span>'
+          : '<span class="side-short">SHORT</span>';
+        const row = (currentPage - 1) * pageSize + i + 1;
+        const maker = t.users?.[0] || '';
+        const taker = t.users?.[1] || '';
+        return `<tr>
+          <td>${row}</td>
+          <td>${fmtTime(t.time)}</td>
+          <td>${sideLabel}</td>
+          <td>$${fmt(t.price)}</td>
+          <td>${t.size}</td>
+          <td class="notional">$${fmt(t.notional)}</td>
+          <td><div class="users-cell">
+            <span class="addr" onclick="openAddr('${maker}')" title="${maker}">${shortAddr(maker)}</span>
+          </div></td>
+          <td><div class="users-cell">
+            <span class="addr" onclick="openAddr('${taker}')" title="${taker}">${shortAddr(taker)}</span>
+          </div></td>
+          <td>${t.merged > 1 ? '<span style="color:#a78bfa">×' + t.merged + '</span>' : '<span style="color:#333">—</span>'}</td>
+          <td><span class="hash" title="${t.hash}">${t.hash?.slice(0,12)}…</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    // pagination
+    renderPagination(data.page, data.totalPages, data.total);
+  }
+
+  function renderPagination(page, totalPages, total) {
+    const el = document.getElementById('pagination');
+    if (totalPages <= 1) { el.innerHTML = ''; return; }
+
+    let html = `<span class="page-info">Page ${page} of ${totalPages} · ${total} results</span>`;
+    html += `<button class="page-btn" onclick="goPage(1)" ${page===1?'disabled':''}>«</button>`;
+    html += `<button class="page-btn" onclick="goPage(${page-1})" ${page===1?'disabled':''}>‹</button>`;
+
+    const start = Math.max(1, page - 2);
+    const end = Math.min(totalPages, page + 2);
+    for (let p = start; p <= end; p++) {
+      html += `<button class="page-btn ${p===page?'current':''}" onclick="goPage(${p})">${p}</button>`;
+    }
+
+    html += `<button class="page-btn" onclick="goPage(${page+1})" ${page===totalPages?'disabled':''}>›</button>`;
+    html += `<button class="page-btn" onclick="goPage(${totalPages})" ${page===totalPages?'disabled':''}>»</button>`;
+    el.innerHTML = html;
+  }
+
+  function goPage(p) {
+    currentPage = p;
+    fetchTrades();
+    window.scrollTo(0, 0);
+  }
+
+  function applyFilter() {
+    currentMin = parseFloat(document.getElementById('minSize').value) || 0;
+    currentPage = 1;
+    fetchTrades();
+  }
+
+  function setPreset(val) {
+    document.getElementById('minSize').value = val;
+    applyFilter();
+  }
+
+  function toggleAuto() {
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+      document.getElementById('autoBadge').textContent = 'AUTO-REFRESH: OFF';
+      document.getElementById('autoBadge').className = 'auto-badge';
+      document.getElementById('autoBtn').textContent = 'Enable Auto';
+    } else {
+      autoInterval = setInterval(() => { fetchTrades(); fetchStatus(); }, 2000);
+      document.getElementById('autoBadge').textContent = 'AUTO-REFRESH: ON';
+      document.getElementById('autoBadge').className = 'auto-badge on';
+      document.getElementById('autoBtn').textContent = 'Disable Auto';
+    }
+  }
+
+  // Initial load
+  fetchStatus();
+  fetchTrades();
+  setInterval(fetchStatus, 5000);
+</script>
+</body>
+</html>
