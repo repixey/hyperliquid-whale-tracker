@@ -6,4 +6,4 @@
 3. ```npm install ```
 
 4. ```node server.js ```
-![Uploading image.png…]()
+
